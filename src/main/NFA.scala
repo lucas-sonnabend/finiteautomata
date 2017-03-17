@@ -41,7 +41,11 @@ class NFA(val startingState: NFAState, val acceptingStates: Set[NFAState]) {
     new NFA(this.startingState, acceptingStates)
   }
 
-  def getEpsilonClosure(state: NFAState): Set[NFAState] = {
+  /**
+    * Given a state it returns all states that can be reached from this states via epsilon transitions.
+    * This does not contain the current state!
+    */
+  private def getEpsilonClosure(state: NFAState): Set[NFAState] = {
     var result: Set[NFAState] = Set()
     val stateQueue: util.Queue[NFAState] = new util.LinkedList[NFAState]()
     stateQueue.add(state)
@@ -72,7 +76,6 @@ class NFA(val startingState: NFAState, val acceptingStates: Set[NFAState]) {
     result
   }
 
-  // TODO: test this
   def copy: NFA = {
     val newStartingState: NFAState = new NFAState(startingState.isAcceptingState)
 
@@ -95,6 +98,25 @@ class NFA(val startingState: NFAState, val acceptingStates: Set[NFAState]) {
     }
     val newAcceptingStates: Set[NFAState] = oldToNewMap.filter(e => acceptingStates.contains(e._1)).values.toSet
     new NFA(newStartingState, newAcceptingStates)
+  }
+
+  def accept(input: String): Boolean = {
+
+    var currentStates: Set[NFAState] = Set(this.startingState)
+
+    val inputChar = input.iterator
+    while(inputChar.hasNext && currentStates.nonEmpty) {
+      val currentInput = Some(inputChar.next())
+      var newNextState: Set[NFAState] = Set()
+      for(currentState <- currentStates) {
+        val statesToTraverseFrom = getEpsilonClosure(currentState) + currentState
+        //TODO simpify this
+        val test: Set[Set[NFAState]] = statesToTraverseFrom.map(_.getNextStates.getOrElse(currentInput, Seq()).toSet)
+        newNextState = newNextState ++ test.fold(Set())((a,b) => a ++ b)
+      }
+      currentStates = newNextState
+    }
+    currentStates.exists(_.isAcceptingState)
   }
 }
 

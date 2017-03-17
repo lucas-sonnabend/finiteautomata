@@ -15,9 +15,8 @@ class NFATest extends FlatSpec with Matchers {
   "NFA.createFromRegex" should "create an NFA from the test regexes" in {
     for ((testRegex, testInputs) <- TestRegexes.TEST_INPUTS) {
       val nfa = NFA.createFromRegex(testRegex)
-      val dfa = DFA.createFromNFA(nfa)
-      for ((testInput, testResult) <- testInputs) {
-        assert(dfa.accept(testInput) == testResult, s" testinput: $testInput for regex $testRegex test failed")
+      for ((input, expected) <- testInputs) {
+        assert(nfa.accept(input) == expected, s" testinput: $input for regex $testRegex test failed")
       }
     }
   }
