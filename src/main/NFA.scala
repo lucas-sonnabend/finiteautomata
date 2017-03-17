@@ -92,7 +92,8 @@ class NFA(val startingState: NFAState, val acceptingStates: Set[NFAState]) {
           oldToNewMap = oldToNewMap + (oldNextState -> newNextState)
           newNextState
         } else
-          oldToNewMap(oldState)
+          oldToNewMap(oldNextState)
+
         newState.addTransition(input, newNextState)
       }
     }

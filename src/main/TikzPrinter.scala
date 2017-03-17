@@ -32,26 +32,29 @@ object TikzPrinter {
     val nodeList: StringBuilder = new StringBuilder()
     nodeList.append(stateToTikzNode(dfa, dfa.startingState, 0))
     val edgeList: StringBuilder = new StringBuilder()
-    val stateQ: util.Queue[DFAState] = new util.LinkedList[DFAState]()
-    stateQ.add(dfa.startingState)
-    var visitedStates: Set[DFAState] = Set()
+    val stateQ: util.Queue[(DFAState, Position)] = new util.LinkedList[(DFAState, Position)]()
+
+    stateQ.add((dfa.startingState, new Position(1,1)))
+    var visitedStates: Map[DFAState, Position] = Map()
     var nodeIndex: Int = 1
     while(!stateQ.isEmpty) {
-      val state = stateQ.poll()
-      var prefNext: Option[DFAState] = None
+      val (state, position) = stateQ.poll()
 
       // add edges
       for ((input, nextState) <- state.getTransitions) {
-        val bend = if(visitedStates.contains(nextState)) "left" else "right"
-        edgeList.append(transToTikzEdge(input, state, nextState, bend = bend))
+        val bend2 = if (visitedStates.contains(nextState) && visitedStates(nextState).x < position.x) "left" else "right"
+        edgeList.append(transToTikzEdge(input, state, nextState, bend = bend2))
       }
 
       // add new next States
-      for ((_, newNextState) <- state.getTransitions.filter(trans => {!visitedStates.contains(trans._2)})) {
+      var prefNext: Option[DFAState] = None
+      var curY = position.y
+      for ((_, newNextState) <- state.getTransitions.filter(trans => {!visitedStates.keySet.contains(trans._2)})) {
         nodeList.append(stateToTikzNode(dfa, newNextState, nodeIndex, rightOf = Some(state), belowOf = prefNext))
         prefNext = Some(newNextState)
-        stateQ.add(newNextState)
-        visitedStates = visitedStates + newNextState
+        stateQ.add((newNextState, new Position(position.x + 1, curY)))
+        visitedStates = visitedStates + (newNextState -> new Position(position.x + 1, curY))
+        curY = curY + 1
         nodeIndex = nodeIndex + 1
       }
     }
@@ -83,4 +86,6 @@ object TikzPrinter {
         s"(${source.getName}) edge          node [above] {$input} (${dest.getName})\n" // try no bend so they don't meet // TODO fix this hack, need to keep proper coordinates for that!
     }
   }
+
+  private class Position(val x: Int, val y: Int)
 }

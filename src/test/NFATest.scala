@@ -1,7 +1,7 @@
 package test
 
 import org.scalatest.{FlatSpec, Matchers}
-import main.{DFA, NFA, TikzPrinter}
+import main.{NFA, TikzPrinter}
 
 class NFATest extends FlatSpec with Matchers {
 
@@ -31,23 +31,22 @@ class NFATest extends FlatSpec with Matchers {
     }
   }
   it should "not change the behaviour of the NFA" in {
-    // TODO
+    for ((testRegex, testInputs) <- TestRegexes.TEST_INPUTS) {
+      val nfa = NFA.createFromRegex(testRegex)
+      val epsilonFreeNfa = nfa.removeEpsilonTransitions()
+      for ((input, expected) <- testInputs) {
+        assert(epsilonFreeNfa.accept(input) == expected, s" testinput: $input for regex $testRegex test failed")
+      }
+    }
   }
 
   "NFA.copy" should "replicate a given non-terminal" in {
-    val nfa = NFA.createFromRegex("((a|b)c)*")
-
-    val nfaCopy = nfa.copy
-
-    // unfortunately this is the only way we can compare NFAs, so we need to rely on the NFA to DFA translation to work,
-    // as well as the DFA equal to work!
-    val dfa = DFA.createFromNFA(nfa)
-    val dfaCopy = DFA.createFromNFA(nfaCopy)
-
-    TikzPrinter.printToTikz(dfa, s"/home/lucas/IdeaProjects/FiniteAutomata/out/automaton_orig.latex")
-    TikzPrinter.printToTikz(dfaCopy, s"/home/lucas/IdeaProjects/FiniteAutomata/out/automaton_copy.latex")
-
-    assert(dfa.equals(dfaCopy))
-    //dfa should equal (dfaCopy)
+    for ((testRegex, testInputs) <- TestRegexes.TEST_INPUTS) {
+      val nfa = NFA.createFromRegex(testRegex)
+      val nfaCopy = nfa.copy
+      for ((input, expected) <- testInputs) {
+        assert(nfaCopy.accept(input) == expected, s" testinput: $input for regex $testRegex test failed")
+      }
+    }
   }
 }
