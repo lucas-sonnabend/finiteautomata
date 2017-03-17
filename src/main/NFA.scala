@@ -12,7 +12,7 @@ class NFA(val startingState: NFAState, val acceptingStates: Set[NFAState]) {
     while(!stateQueue.isEmpty) {
       val cur = stateQueue.poll()
       output.append(s"${cur.toVerboseString}\n")
-      for ((_, elem) <- cur.getNextStates) {
+      for ((_, elem) <- cur.getNextStatesAsSeq) {
         if (!visitedStates.contains(elem))
           stateQueue.add(elem)
         visitedStates = visitedStates + elem
@@ -24,16 +24,15 @@ class NFA(val startingState: NFAState, val acceptingStates: Set[NFAState]) {
   def removeEpsilonTransitions(): NFA = {
     // find all states with epsilonTransitions
     val statesWithEpsilonTransition = getAllStates.filter( s =>
-      s.getNextStates.exists(_._1.isEmpty))
+      s.getNextStatesAsSeq.exists(_._1.isEmpty))
 
     for (state <- statesWithEpsilonTransition) {
       for(nextState <- getEpsilonClosure(state)) {
         // find all the non-epsilon next states of these, and rewire them
-        for((input, nextNextState) <- nextState.getNextStates.filter(_._1.isDefined)) {
+        for((input, nextNextState) <- nextState.getNextStatesAsSeq.filter(_._1.isDefined)) {
           state.addTransition(input, nextNextState)
         }
-        // if nextState (that is reachable from state by epsilon transition(s) is accepting, then
-        if(nextState.isAcceptingState) nextState.isAcceptingState = true
+        if(nextState.isAcceptingState) state.isAcceptingState = true
       }
       state.removeEpsilonTransitions()
     }
@@ -49,7 +48,7 @@ class NFA(val startingState: NFAState, val acceptingStates: Set[NFAState]) {
     while(!stateQueue.isEmpty) {
       val currentState = stateQueue.poll()
       // get all the next states reachable by an epsilon transition
-      for(nextState <- currentState.getNextStates.filter(_._1.isEmpty).map(_._2)) {
+      for(nextState <- currentState.getNextStatesAsSeq.filter(_._1.isEmpty).map(_._2)) {
         if (!result.contains(nextState)) {
           result = result + nextState
           stateQueue.add(nextState)
@@ -65,12 +64,37 @@ class NFA(val startingState: NFAState, val acceptingStates: Set[NFAState]) {
     stateQueue.add(startingState)
     while(!stateQueue.isEmpty) {
       val cur = stateQueue.poll()
-      for (unvisitedNextState <- cur.getNextStates.map(_._2).filter(!result.contains(_))) {
+      for (unvisitedNextState <- cur.getNextStatesAsSeq.map(_._2).filter(!result.contains(_))) {
         stateQueue.add(unvisitedNextState)
         result = result + unvisitedNextState
       }
     }
     result
+  }
+
+  // TODO: test this
+  def copy: NFA = {
+    val newStartingState: NFAState = new NFAState(startingState.isAcceptingState)
+
+    var oldToNewMap: Map[NFAState, NFAState] = Map(startingState -> newStartingState)
+    val stateQueue: util.Queue[NFAState] = new util.LinkedList[NFAState]()
+    stateQueue.add(startingState)
+    while(!stateQueue.isEmpty) {
+      val oldState = stateQueue.poll()
+      val newState: NFAState = oldToNewMap(oldState)
+      for ((input, oldNextState) <- oldState.getNextStatesAsSeq) {
+        val newNextState = if (!oldToNewMap.contains(oldNextState)) {
+          val newNextState = new NFAState(oldNextState.isAcceptingState)
+          stateQueue.add(oldNextState)
+          oldToNewMap = oldToNewMap + (oldNextState -> newNextState)
+          newNextState
+        } else
+          oldToNewMap(oldState)
+        newState.addTransition(input, newNextState)
+      }
+    }
+    val newAcceptingStates: Set[NFAState] = oldToNewMap.filter(e => acceptingStates.contains(e._1)).values.toSet
+    new NFA(newStartingState, newAcceptingStates)
   }
 }
 
@@ -190,5 +214,7 @@ class NFAState(var isAcceptingState: Boolean = false) {
     * This returns a sequence pairs (input, nextState) of all next states and which inputs lead to it,
     * by the magic of functional programming!!!!!!!
     */
-  def getNextStates: Seq[(Option[Char], NFAState)] = nextStates.map(e => e._2.map((e._1, _))).fold(Seq())((l, e) => l ++ e)
+  def getNextStatesAsSeq: Seq[(Option[Char], NFAState)] = nextStates.map(e => e._2.map((e._1, _))).fold(Seq())((l, e) => l ++ e)
+
+  def getNextStates: Map[Option[Char], Seq[NFAState]] = this.nextStates
 }

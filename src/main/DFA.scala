@@ -34,6 +34,62 @@ class DFA(var startingState: DFAState) {
     }
     currentState != null && currentState.isAcceptingState
   }
+
+  def copy: DFA = {
+    val newStartingState = new DFAState(startingState.isAcceptingState)
+
+    var oldToNewMap: Map[DFAState, DFAState] = Map(startingState -> newStartingState)
+    val stateQ: util.Queue[DFAState] = new util.LinkedList[DFAState]()
+    stateQ.add(startingState)
+    while(!stateQ.isEmpty) {
+      val oldState = stateQ.poll()
+      val newState = oldToNewMap(oldState)
+      for ((input, oldNextState) <- oldState.getTransitions) {
+        val newNextState = if (!oldToNewMap.contains(oldNextState)) {
+          val newNextState = new DFAState(oldNextState.isAcceptingState)
+          stateQ.add(oldNextState)
+          oldToNewMap = oldToNewMap + (oldNextState -> newNextState)
+          newNextState
+        } else oldToNewMap(oldNextState)
+
+        newState.addTransition(input, newNextState)
+      }
+    }
+    new DFA(newStartingState)
+  }
+
+  override def equals(obj: scala.Any): Boolean = {
+    obj match {
+      case otherDFA: DFA =>
+        val stateQ: util.Queue[DFAState] = new util.LinkedList[DFAState]()
+        stateQ.add(this.startingState)
+        var visitedStates: Map[DFAState, DFAState] = Map(this.startingState -> otherDFA.startingState)
+        var canBeEqual = true
+        while(!stateQ.isEmpty && canBeEqual) {
+          val myCurrentState = stateQ.poll()
+          val otherCurrentState = visitedStates(myCurrentState)
+          if (myCurrentState.isAcceptingState ^ otherCurrentState.isAcceptingState) canBeEqual = false
+
+          // check if for every transition in my current state there is an equivalent transition for the other state
+          for ((input, myNextState) <- myCurrentState.getTransitions) {
+            val otherNextState = otherCurrentState.getNextState(input)
+            if (otherNextState == null) canBeEqual = false
+            else {
+              if(!visitedStates.contains(myNextState)) {
+                visitedStates = visitedStates + (myNextState -> otherNextState)
+                stateQ.add(myNextState)
+              }
+            }
+          }
+          // check whether there are any transitions for the other state that the current state doesn't have
+          val keyDiff = otherCurrentState.getTransitions.keySet diff myCurrentState.getTransitions.keySet
+          if (keyDiff.nonEmpty) canBeEqual = false
+        }
+
+        canBeEqual
+      case _ => false
+    }
+  }
 }
 
 object DFA {
@@ -47,10 +103,10 @@ object DFA {
     */
   def createFromRegex(regex: String): DFA = {
     val simpleRegex = regex
-    createFromNDA(NFA.createFromRegex(simpleRegex))
+    createFromNFA(NFA.createFromRegex(simpleRegex))
   }
 
-  def createFromNDA(nda: NFA): DFA = {
+  def createFromNFA(nda: NFA): DFA = {
     val epsilonFreeNDA = nda.removeEpsilonTransitions()
 
     val startingState = new DFAState(epsilonFreeNDA.startingState.isAcceptingState)
@@ -83,7 +139,7 @@ object DFA {
   private def findNextStatesSets(ndaStates: Set[NFAState]): Map[Char, Set[NFAState]] = {
     var transitions: Map[Char, Set[NFAState]] = Map()
     for (ndaState <- ndaStates) {
-      for ((input, nextState) <- ndaState.getNextStates) {
+      for ((input, nextState) <- ndaState.getNextStatesAsSeq) {
         val currentNextStateSet: Set[NFAState] = transitions.getOrElse(input.get, Set())
         transitions = transitions + (input.get -> (currentNextStateSet + nextState))
       }

@@ -77,7 +77,10 @@ object TikzPrinter {
     if (source.equals(dest)) {
       s"(${source.getName}) edge  [loop above]    node {$input} ()"
     } else {
-      s"(${source.getName}) edge  [bend $bend=45]    node [above] {$input} (${dest.getName})\n"
+      if (bend == "right")
+        s"(${source.getName}) edge  [bend $bend=45]    node [above] {$input} (${dest.getName})\n"
+      else
+        s"(${source.getName}) edge          node [above] {$input} (${dest.getName})\n" // try no bend so they don't meet // TODO fix this hack, need to keep proper coordinates for that!
     }
   }
 }

@@ -10,7 +10,7 @@ class automatonTest extends FlatSpec with Matchers {
 
   "DFA" should "create an automaton for (a|b*)c" in {
     val nda = NFA.createFromRegex("(a|b*)c").removeEpsilonTransitions()
-    val dfa = DFA.createFromNDA(nda)
+    val dfa = DFA.createFromNFA(nda)
 
     dfa.accept("ac") should be (true)
     dfa.accept("aac") should be (false)

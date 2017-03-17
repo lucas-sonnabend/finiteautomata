@@ -3,9 +3,6 @@ package test
 import main.RegexSimplifier
 import org.scalatest.{FlatSpec, Matchers}
 
-/**
-  * Created by lucas on 14/03/17.
-  */
 class RegexSimplifierTest extends FlatSpec with Matchers {
 
   "RegexSimplifier" should
