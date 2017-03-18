@@ -1,9 +1,9 @@
 package test
 
 import org.scalatest.{FlatSpec, Matchers}
-import main.{NFA, TikzPrinter}
+import main.NFA
 
-class NFATest extends FlatSpec with Matchers {
+class NFATest extends FlatSpec with Matchers{
 
   "NFA.createFromTerminal" should "create an NFA from terminal c" in {
     val nfa = NFA.createFromTerminal('c')
@@ -21,22 +21,28 @@ class NFATest extends FlatSpec with Matchers {
     }
   }
 
-  "remove" should "remove all epsilon transitions" in {
-    for ((testRegex, _) <- TestRegexes.TEST_INPUTS) {
-      val nfa = NFA.createFromRegex(testRegex)
-      val epsilonFreeNfa = nfa.removeEpsilonTransitions()
-      for (state <- epsilonFreeNfa.getAllStates) {
-        state.getNextStates should not contain key (None)
-      }
-    }
+  "test" should "do stuff" in {
+    val testRegex = "((a|b)c)*"
+    val input = "acacac"
+    val expected = true
+
+    val nfa = NFA.createFromRegex(testRegex)
+
+
+    assert(nfa.accept(input) == expected, s" testinput: $input for regex $testRegex test failed")
+
   }
-  it should "not change the behaviour of the NFA" in {
+
+  "toDFA" should "create a DFA from the NFA that accepts the same inputs" in {
+    var index = 0
     for ((testRegex, testInputs) <- TestRegexes.TEST_INPUTS) {
       val nfa = NFA.createFromRegex(testRegex)
-      val epsilonFreeNfa = nfa.removeEpsilonTransitions()
-      for ((input, expected) <- testInputs) {
-        assert(epsilonFreeNfa.accept(input) == expected, s" testinput: $input for regex $testRegex test failed")
+      val dfa = nfa.toDFA
+      //dfa.printToTikz(s"/home/lucas/IdeaProjects/FiniteAutomata/out/automaton_$index.latex")  //uncomment this to print the DFAs for debugging!
+      for ((testInput, testResult) <- testInputs) {
+        assert(dfa.accept(testInput) == testResult, s" testinput: $testInput for regex $testRegex test failed, index: $index")
       }
+      index = index + 1
     }
   }
 

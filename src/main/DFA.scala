@@ -1,5 +1,6 @@
 package main
 
+import java.io.{File, PrintWriter}
 import java.util
 
 class DFA(var startingState: DFAState) {
@@ -90,6 +91,88 @@ class DFA(var startingState: DFAState) {
       case _ => false
     }
   }
+
+  def printToTikz(filename: String): Unit = {
+    val output: StringBuilder = new StringBuilder()
+    output.append("\\documentclass{article}\n")
+    output.append("\n")
+    output.append("\\usepackage{pgf}\n")
+    output.append("\\usepackage{tikz}\n")
+    output.append("\\usetikzlibrary{positioning,automata}\n")
+    output.append("\\usepackage[latin1]{inputenc}\n")
+    output.append("\\begin{document}\n")
+    output.append(getTikzPicture())
+    output.append("\\end{document}")
+
+    val pw = new PrintWriter(new File(filename))
+    pw.write(output.result())
+    pw.close()
+  }
+
+  def getTikzPicture(): String = {
+    val tikzPicture: StringBuilder = new StringBuilder()
+    tikzPicture.append("\\begin{tikzpicture}[shorten >=1pt,node distance=2cm,on grid]\n")
+
+    val nodeList: StringBuilder = new StringBuilder()
+    nodeList.append(stateToTikzNode(startingState, 0))
+    val edgeList: StringBuilder = new StringBuilder()
+    val stateQ: util.Queue[(DFAState, Position)] = new util.LinkedList[(DFAState, Position)]()
+
+    stateQ.add((startingState, new Position(1,1)))
+    var visitedStates: Map[DFAState, Position] = Map()
+    var nodeIndex: Int = 1
+    while(!stateQ.isEmpty) {
+      val (state, position) = stateQ.poll()
+
+      // add edges
+      for ((input, nextState) <- state.getTransitions) {
+        val isBackwardsEdge = visitedStates.contains(nextState) && visitedStates(nextState).x < position.x
+        edgeList.append(transToTikzEdge(input, state, nextState, isBackwardsEdge = isBackwardsEdge))
+      }
+
+      // add new next States
+      var prefNext: Option[DFAState] = None
+      var curY = position.y
+      for ((_, newNextState) <- state.getTransitions.filter(trans => {!visitedStates.keySet.contains(trans._2)})) {
+        nodeList.append(stateToTikzNode(newNextState, nodeIndex, rightOf = Some(state), belowOf = prefNext))
+        prefNext = Some(newNextState)
+        stateQ.add((newNextState, new Position(position.x + 1, curY)))
+        visitedStates = visitedStates + (newNextState -> new Position(position.x + 1, curY))
+        curY = curY + 1
+        nodeIndex = nodeIndex + 1
+      }
+    }
+    tikzPicture.append(nodeList)
+    tikzPicture.append("\\path[->]\n")
+    tikzPicture.append(edgeList)
+    tikzPicture.append(";\n")
+    tikzPicture.append("\\end{tikzpicture}\n")
+    tikzPicture.result
+  }
+
+  private def stateToTikzNode(state: DFAState, index: Int, rightOf: Option[DFAState] = None, belowOf: Option[DFAState] = None): String = {
+    val isStarting: String = if (state.eq(startingState)) ",initial" else ""
+    val isAccepting: String = if(state.isAcceptingState) ",accepting" else ""
+    val position: String = if(belowOf.isDefined)
+      s"[below of=${belowOf.get.getName}]"
+    else if (rightOf.isDefined)
+      s"[right of=${rightOf.get.getName}]"
+    else ""
+    s"\\node[state$isStarting$isAccepting]   (${state.getName}) $position {$$q_$index$$};\n"
+  }
+
+  private def transToTikzEdge(input: Char, source: DFAState, dest: DFAState, isBackwardsEdge: Boolean): String = {
+    if (source.equals(dest)) {
+      s"(${source.getName}) edge  [loop above]    node {$input} ()"
+    } else {
+      if (isBackwardsEdge)
+        s"(${source.getName}) edge  [bend  left=45]    node [above] {$input} (${dest.getName})\n"
+      else
+        s"(${source.getName}) edge                     node [above] {$input} (${dest.getName})\n"
+    }
+  }
+
+  private class Position(val x: Int, val y: Int)
 }
 
 object DFA {
@@ -103,48 +186,7 @@ object DFA {
     */
   def createFromRegex(regex: String): DFA = {
     val simpleRegex = regex
-    createFromNFA(NFA.createFromRegex(simpleRegex))
-  }
-
-  def createFromNFA(nda: NFA): DFA = {
-    val epsilonFreeNDA = nda.removeEpsilonTransitions()
-
-    val startingState = new DFAState(epsilonFreeNDA.startingState.isAcceptingState)
-    var ndaToDfaMap: Map[Set[NFAState], DFAState] = Map(Set(epsilonFreeNDA.startingState) -> startingState)
-    val ndaStateSetQueue: util.Queue[Set[NFAState]] = new util.LinkedList[Set[NFAState]]()
-    ndaStateSetQueue.add(Set(epsilonFreeNDA.startingState))
-
-    while (!ndaStateSetQueue.isEmpty) {
-      val currentStateSet = ndaStateSetQueue.poll()
-      // find corresponding DFA state
-      val currentDFAState = ndaToDfaMap(currentStateSet)
-      //find next state sets for each input symbol
-      val nextStateSets = findNextStatesSets(currentStateSet)
-      for ((input, nextStateSet) <- nextStateSets) {
-        // if the next DFA state already exists get it, otherwise create it and add it to the Q
-        val nextDFAState = ndaToDfaMap.getOrElse(nextStateSet, {
-          val newState = new DFAState(nextStateSet.exists(_.isAcceptingState))
-          ndaToDfaMap = ndaToDfaMap + (nextStateSet -> newState)
-          ndaStateSetQueue.add(nextStateSet)
-          newState
-        })
-        //add transitions from current DFA state to new DFA state
-        ndaToDfaMap = ndaToDfaMap + (nextStateSet -> nextDFAState)
-        currentDFAState.addTransition(input, nextDFAState)
-      }
-    }
-    new DFA(startingState)
-  }
-
-  private def findNextStatesSets(ndaStates: Set[NFAState]): Map[Char, Set[NFAState]] = {
-    var transitions: Map[Char, Set[NFAState]] = Map()
-    for (ndaState <- ndaStates) {
-      for ((input, nextState) <- ndaState.getNextStatesAsSeq) {
-        val currentNextStateSet: Set[NFAState] = transitions.getOrElse(input.get, Set())
-        transitions = transitions + (input.get -> (currentNextStateSet + nextState))
-      }
-    }
-    transitions
+    NFA.createFromRegex(simpleRegex).toDFA
   }
 }
 

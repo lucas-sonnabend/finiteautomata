@@ -2,7 +2,139 @@ package main
 
 import java.util
 
-class NFA(val startingState: NFAState, val acceptingStates: Set[NFAState]) {
+class NFA private(val startingState: NFAState, val acceptingStates: Set[NFAState]) {
+  /**
+    * Returns a new deep copy of this NFA.
+    */
+  def copy: NFA = {
+    val newStartingState: NFAState = new NFAState(startingState.isAcceptingState)
+
+    var oldToNewMap: Map[NFAState, NFAState] = Map(startingState -> newStartingState)
+    val stateQueue: util.Queue[NFAState] = new util.LinkedList[NFAState]()
+    stateQueue.add(startingState)
+    while(!stateQueue.isEmpty) {
+      val oldState = stateQueue.poll()
+      val newState: NFAState = oldToNewMap(oldState)
+      for ((input, oldNextState) <- oldState.getNextStatesAsSeq) {
+        val newNextState = if (!oldToNewMap.contains(oldNextState)) {
+          val newNextState = new NFAState(oldNextState.isAcceptingState)
+          stateQueue.add(oldNextState)
+          oldToNewMap = oldToNewMap + (oldNextState -> newNextState)
+          newNextState
+        } else
+          oldToNewMap(oldNextState)
+
+        newState.addTransition(input, newNextState)
+      }
+    }
+    val newAcceptingStates: Set[NFAState] = oldToNewMap.filter(e => acceptingStates.contains(e._1)).values.toSet
+    new NFA(newStartingState, newAcceptingStates)
+  }
+
+  /**
+    * Returns true if the given input is accepted by the NFA.
+    */
+  def accept(input: String): Boolean = {
+    var currentStates: Set[NFAState] = Set(this.startingState)
+
+    val inputChar = input.iterator
+    while(inputChar.hasNext && currentStates.nonEmpty) {
+      val currentInput = Some(inputChar.next())
+      var newNextState: Set[NFAState] = Set()
+      for(currentState <- currentStates) {
+        val statesToTraverseFrom = getEpsilonClosure(currentState) + currentState
+        // the new next states are the states reachable from the currentState, epsilon transitions and a transition consuming current input Char
+        newNextState = statesToTraverseFrom.foldLeft(newNextState)((nextStates, state) => nextStates ++ state.getNextStates.getOrElse(currentInput, Seq()).toSet)
+      }
+      currentStates = newNextState
+    }
+    val epsilonClosureOfCurrentState = currentStates.foldLeft[Set[NFAState]](currentStates)((reachable, state) => reachable ++ getEpsilonClosure(state))
+    epsilonClosureOfCurrentState.exists(_.isAcceptingState)
+  }
+
+  /**
+    * Create and return a new NFA that is this NFA with the star operator applied.
+    * This NFA remains unchanged.
+    */
+  def applyStar(): NFA = {
+    val newNFA = this.copy
+    val newStartingState = new NFAState(true)
+    newStartingState.addEpsilonTransition(newNFA.startingState)
+    for(acceptingState <- newNFA.acceptingStates) {
+      acceptingState.addEpsilonTransition(newStartingState)
+      acceptingState.isAcceptingState = false
+    }
+    new NFA(newStartingState, Set(newStartingState))
+  }
+
+  /**
+    * Create and return a new NFA that is the union of this NFA and the other NFA.
+    * This NFA and the other NFA remain unchanged.
+    */
+  def union(otherNFA: NFA): NFA = {
+    val newNFA1 = this.copy
+    val newNFA2 = otherNFA.copy
+    val newStartingState = new NFAState()
+    newStartingState.addEpsilonTransition(newNFA1.startingState)
+    newStartingState.addEpsilonTransition(newNFA2.startingState)
+    new NFA(newStartingState, newNFA1.acceptingStates ++ newNFA2.acceptingStates)
+  }
+
+  /**
+    * Create and return a new NFA that is the concatenation of this NFA and the other NFA.
+    * This NFA and the other NFA remain unchanged.
+    */
+  def concat(otherNFA: NFA): NFA = {
+    val newNFA1 = this.copy
+    val newNFA2 = otherNFA.copy
+    newNFA1.acceptingStates.foreach(acceptingState => {
+      acceptingState.addEpsilonTransition(newNFA2.startingState)
+      acceptingState.isAcceptingState = false
+    })
+    new NFA(newNFA1.startingState, newNFA2.acceptingStates)
+  }
+
+  def toDFA: DFA = {
+    val epsilonFreeNDA = this.removeEpsilonTransitions()
+
+    val startingState = new DFAState(epsilonFreeNDA.startingState.isAcceptingState)
+    var ndaToDfaMap: Map[Set[NFAState], DFAState] = Map(Set(epsilonFreeNDA.startingState) -> startingState)
+    val ndaStateSetQueue: util.Queue[Set[NFAState]] = new util.LinkedList[Set[NFAState]]()
+    ndaStateSetQueue.add(Set(epsilonFreeNDA.startingState))
+
+    while (!ndaStateSetQueue.isEmpty) {
+      val currentStateSet = ndaStateSetQueue.poll()
+      // find corresponding DFA state
+      val currentDFAState = ndaToDfaMap(currentStateSet)
+      //find next state sets for each input symbol
+      val nextStateSets = findNextStatesSets(currentStateSet)
+      for ((input, nextStateSet) <- nextStateSets) {
+        // if the next DFA state already exists get it, otherwise create it and add it to the Q
+        val nextDFAState = ndaToDfaMap.getOrElse(nextStateSet, {
+          val newState = new DFAState(nextStateSet.exists(_.isAcceptingState))
+          ndaToDfaMap = ndaToDfaMap + (nextStateSet -> newState)
+          ndaStateSetQueue.add(nextStateSet)
+          newState
+        })
+        //add transitions from current DFA state to new DFA state
+        ndaToDfaMap = ndaToDfaMap + (nextStateSet -> nextDFAState)
+        currentDFAState.addTransition(input, nextDFAState)
+      }
+    }
+    new DFA(startingState)
+  }
+
+  // TODO this is probably repreated in finding epsilonClosure and accept() so remove redundancy!
+  private def findNextStatesSets(ndaStates: Set[NFAState]): Map[Char, Set[NFAState]] = {
+    var transitions: Map[Char, Set[NFAState]] = Map()
+    for (ndaState <- ndaStates) {
+      for ((input, nextState) <- ndaState.getNextStatesAsSeq) {
+        val currentNextStateSet: Set[NFAState] = transitions.getOrElse(input.get, Set())
+        transitions = transitions + (input.get -> (currentNextStateSet + nextState))
+      }
+    }
+    transitions
+  }
 
   override def toString: String = {
     val output: StringBuilder = new StringBuilder()
@@ -21,7 +153,7 @@ class NFA(val startingState: NFAState, val acceptingStates: Set[NFAState]) {
     output.result()
   }
 
-  def removeEpsilonTransitions(): NFA = {
+  private def removeEpsilonTransitions(): NFA = {
     // find all states with epsilonTransitions
     val statesWithEpsilonTransition = getAllStates.filter( s =>
       s.getNextStatesAsSeq.exists(_._1.isEmpty))
@@ -62,7 +194,7 @@ class NFA(val startingState: NFAState, val acceptingStates: Set[NFAState]) {
     result
   }
 
-  def getAllStates: Set[NFAState] = {
+  private def getAllStates: Set[NFAState] = {
     var result: Set[NFAState] = Set(startingState)
     val stateQueue: util.Queue[NFAState] = new util.LinkedList[NFAState]()
     stateQueue.add(startingState)
@@ -74,50 +206,6 @@ class NFA(val startingState: NFAState, val acceptingStates: Set[NFAState]) {
       }
     }
     result
-  }
-
-  def copy: NFA = {
-    val newStartingState: NFAState = new NFAState(startingState.isAcceptingState)
-
-    var oldToNewMap: Map[NFAState, NFAState] = Map(startingState -> newStartingState)
-    val stateQueue: util.Queue[NFAState] = new util.LinkedList[NFAState]()
-    stateQueue.add(startingState)
-    while(!stateQueue.isEmpty) {
-      val oldState = stateQueue.poll()
-      val newState: NFAState = oldToNewMap(oldState)
-      for ((input, oldNextState) <- oldState.getNextStatesAsSeq) {
-        val newNextState = if (!oldToNewMap.contains(oldNextState)) {
-          val newNextState = new NFAState(oldNextState.isAcceptingState)
-          stateQueue.add(oldNextState)
-          oldToNewMap = oldToNewMap + (oldNextState -> newNextState)
-          newNextState
-        } else
-          oldToNewMap(oldNextState)
-
-        newState.addTransition(input, newNextState)
-      }
-    }
-    val newAcceptingStates: Set[NFAState] = oldToNewMap.filter(e => acceptingStates.contains(e._1)).values.toSet
-    new NFA(newStartingState, newAcceptingStates)
-  }
-
-  def accept(input: String): Boolean = {
-
-    var currentStates: Set[NFAState] = Set(this.startingState)
-
-    val inputChar = input.iterator
-    while(inputChar.hasNext && currentStates.nonEmpty) {
-      val currentInput = Some(inputChar.next())
-      var newNextState: Set[NFAState] = Set()
-      for(currentState <- currentStates) {
-        val statesToTraverseFrom = getEpsilonClosure(currentState) + currentState
-        //TODO simpify this
-        val test: Set[Set[NFAState]] = statesToTraverseFrom.map(_.getNextStates.getOrElse(currentInput, Seq()).toSet)
-        newNextState = newNextState ++ test.fold(Set())((a,b) => a ++ b)
-      }
-      currentStates = newNextState
-    }
-    currentStates.exists(_.isAcceptingState)
   }
 }
 
@@ -134,7 +222,7 @@ object NFA {
     while(index < regularExpression.length()) {
       regularExpression.charAt(index) match {
         case '(' =>
-          totalNFA = if (totalNFA == null) currentNFA else NFA.createConcat(totalNFA, currentNFA)
+          totalNFA = if (totalNFA == null) currentNFA else totalNFA.concat(currentNFA)
           val closingIndex = regularExpression.lastIndexOf(')')
           if (closingIndex == -1) throw new ParsingException('(', index, "Could not find a closing bracket")
           currentNFA = createFromRegex(regularExpression.substring(index + 1, closingIndex))
@@ -142,22 +230,22 @@ object NFA {
         case '*' =>
           currentNFA match {
             case null => throw new ParsingException('*', index, "Expected a valid regex expression before the *.")
-            case _ => currentNFA = NFA.createStar(currentNFA)
+            case _ => currentNFA = currentNFA.applyStar()
           }
           index = index + 1
         case '|' =>
-          totalNFA = if (totalNFA == null) currentNFA else NFA.createConcat(totalNFA, currentNFA)
+          totalNFA = if (totalNFA == null) currentNFA else totalNFA.concat(currentNFA)
           val otherHalf = regularExpression.substring(index + 1)
           val otherHalfNFA = createFromRegex(otherHalf)
-          currentNFA = createUnion(totalNFA, otherHalfNFA)
+          currentNFA = totalNFA.union(otherHalfNFA)
           totalNFA = null
           index = regularExpression.length()
         case '\\' =>
-          totalNFA = if (totalNFA == null) currentNFA else NFA.createConcat(totalNFA, currentNFA)
+          totalNFA = if (totalNFA == null) currentNFA else totalNFA.concat(currentNFA)
           currentNFA = createFromTerminal(regularExpression.charAt(index + 1))
           index = index + 2
         case c: Char =>
-          totalNFA = if (totalNFA == null) currentNFA else NFA.createConcat(totalNFA, currentNFA)
+          totalNFA = if (totalNFA == null) currentNFA else totalNFA.concat(currentNFA)
           currentNFA = createFromTerminal(c)
           index = index + 1
       }
@@ -165,44 +253,19 @@ object NFA {
     if (totalNFA == null) {
       currentNFA
     } else {
-      val result = createConcat(totalNFA, currentNFA)
+      val result = totalNFA.concat(currentNFA)
       result
     }
   }
 
+  /**
+    * Create and return a new NFA that accepts the given single terminal input.
+    */
   def createFromTerminal(singleTerminal: Char): NFA = {
     val startingState = new NFAState()
     val acceptingState = new NFAState(true)
     startingState.addTransition(singleTerminal, acceptingState)
     new NFA(startingState, Set(acceptingState))
-  }
-
-  def createStar(nfa: NFA): NFA = {
-    val newStartingState = new NFAState(true)
-    newStartingState.addEpsilonTransition(nfa.startingState)
-
-    for(acceptingState <- nfa.acceptingStates) {
-      acceptingState.addEpsilonTransition(newStartingState)
-      acceptingState.isAcceptingState = false
-    }
-    new NFA(newStartingState, Set(newStartingState))
-  }
-
-  def createUnion(nfa1: NFA, nfa2: NFA): NFA = {
-
-    val newStartingState = new NFAState()
-    newStartingState.addEpsilonTransition(nfa1.startingState)
-    newStartingState.addEpsilonTransition(nfa2.startingState)
-
-    new NFA(newStartingState, nfa1.acceptingStates ++ nfa2.acceptingStates)
-  }
-
-  def createConcat(nfa1: NFA, nfa2: NFA): NFA = {
-    nfa1.acceptingStates.foreach(acceptingState => {
-      acceptingState.addEpsilonTransition(nfa2.startingState)
-      acceptingState.isAcceptingState = false
-    })
-    new NFA(nfa1.startingState, nfa2.acceptingStates)
   }
 }
 

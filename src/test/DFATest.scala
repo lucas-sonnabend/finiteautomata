@@ -6,19 +6,6 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class DFATest extends FlatSpec with Matchers {
 
-  "DFA.createFromNFA" should "create a DFA for the test regexes" in {
-    var index = 0
-    for ((testRegex, testInputs) <- TestRegexes.TEST_INPUTS) {
-      val nfa = NFA.createFromRegex(testRegex)
-      val dfa = DFA.createFromNFA(nfa)
-      //TikzPrinter.printToTikz(dfa, s"/home/lucas/IdeaProjects/FiniteAutomata/out/automaton_$index.latex")  //uncomment this to print the DFAs for debugging!
-      for ((testInput, testResult) <- testInputs) {
-        assert(dfa.accept(testInput) == testResult, s" testinput: $testInput for regex $testRegex test failed, index: $index")
-      }
-      index = index + 1
-    }
-  }
-
   "DFA.createFromRegex" should "create a DFA from the test regexes" in {
     for ((testRegex, testInputs) <- TestRegexes.TEST_INPUTS) {
       val dfa = DFA.createFromRegex(testRegex)
