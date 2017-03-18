@@ -21,23 +21,11 @@ class NFATest extends FlatSpec with Matchers{
     }
   }
 
-  "test" should "do stuff" in {
-    val testRegex = "((a|b)c)*"
-    val input = "acacac"
-    val expected = true
-
-    val nfa = NFA.createFromRegex(testRegex)
-
-
-    assert(nfa.accept(input) == expected, s" testinput: $input for regex $testRegex test failed")
-
-  }
-
   "toDFA" should "create a DFA from the NFA that accepts the same inputs" in {
     var index = 0
     for ((testRegex, testInputs) <- TestRegexes.TEST_INPUTS) {
       val nfa = NFA.createFromRegex(testRegex)
-      val dfa = nfa.toDFA
+      val dfa = nfa.toSimpleDFA
       //dfa.printToTikz(s"/home/lucas/IdeaProjects/FiniteAutomata/out/automaton_$index.latex")  //uncomment this to print the DFAs for debugging!
       for ((testInput, testResult) <- testInputs) {
         assert(dfa.accept(testInput) == testResult, s" testinput: $testInput for regex $testRegex test failed, index: $index")

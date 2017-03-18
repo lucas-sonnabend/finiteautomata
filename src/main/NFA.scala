@@ -23,7 +23,6 @@ class NFA private(val startingState: NFAState, val acceptingStates: Set[NFAState
           newNextState
         } else
           oldToNewMap(oldNextState)
-
         newState.addTransition(input, newNextState)
       }
     }
@@ -36,17 +35,10 @@ class NFA private(val startingState: NFAState, val acceptingStates: Set[NFAState
     */
   def accept(input: String): Boolean = {
     var currentStates: Set[NFAState] = Set(this.startingState)
-
     val inputChar = input.iterator
     while(inputChar.hasNext && currentStates.nonEmpty) {
-      val currentInput = Some(inputChar.next())
-      var newNextState: Set[NFAState] = Set()
-      for(currentState <- currentStates) {
-        val statesToTraverseFrom = getEpsilonClosure(currentState) + currentState
-        // the new next states are the states reachable from the currentState, epsilon transitions and a transition consuming current input Char
-        newNextState = statesToTraverseFrom.foldLeft(newNextState)((nextStates, state) => nextStates ++ state.getNextStates.getOrElse(currentInput, Seq()).toSet)
-      }
-      currentStates = newNextState
+      val currentInput = inputChar.next()
+      currentStates = findNextStatesSets(currentStates).getOrElse(currentInput, Set())
     }
     val epsilonClosureOfCurrentState = currentStates.foldLeft[Set[NFAState]](currentStates)((reachable, state) => reachable ++ getEpsilonClosure(state))
     epsilonClosureOfCurrentState.exists(_.isAcceptingState)
@@ -94,10 +86,20 @@ class NFA private(val startingState: NFAState, val acceptingStates: Set[NFAState
     new NFA(newNFA1.startingState, newNFA2.acceptingStates)
   }
 
-  def toDFA: DFA = {
+  /***
+    * Create and returns a DFA that accepts the same inputs as this NFA, and uses the base DFAState
+    * class to represent DFA states
+    */
+  def toSimpleDFA: DFA[DFAState] = this.toDFA[DFAState](isAccepting => new DFAState(isAccepting))
+
+  /***
+    * Create and return a DFA that accepts the same inputs as this NFA and internally uses the
+    * S class to represent DFA states
+    */
+  def toDFA[S <: DFAState](stateCreator: (Boolean) => S): DFA[S] = {
     val epsilonFreeNDA = this.removeEpsilonTransitions()
 
-    val startingState = new DFAState(epsilonFreeNDA.startingState.isAcceptingState)
+    val startingState = stateCreator(epsilonFreeNDA.startingState.isAcceptingState)
     var ndaToDfaMap: Map[Set[NFAState], DFAState] = Map(Set(epsilonFreeNDA.startingState) -> startingState)
     val ndaStateSetQueue: util.Queue[Set[NFAState]] = new util.LinkedList[Set[NFAState]]()
     ndaStateSetQueue.add(Set(epsilonFreeNDA.startingState))
@@ -111,7 +113,7 @@ class NFA private(val startingState: NFAState, val acceptingStates: Set[NFAState
       for ((input, nextStateSet) <- nextStateSets) {
         // if the next DFA state already exists get it, otherwise create it and add it to the Q
         val nextDFAState = ndaToDfaMap.getOrElse(nextStateSet, {
-          val newState = new DFAState(nextStateSet.exists(_.isAcceptingState))
+          val newState = stateCreator(nextStateSet.exists(_.isAcceptingState))
           ndaToDfaMap = ndaToDfaMap + (nextStateSet -> newState)
           ndaStateSetQueue.add(nextStateSet)
           newState
@@ -121,19 +123,7 @@ class NFA private(val startingState: NFAState, val acceptingStates: Set[NFAState
         currentDFAState.addTransition(input, nextDFAState)
       }
     }
-    new DFA(startingState)
-  }
-
-  // TODO this is probably repreated in finding epsilonClosure and accept() so remove redundancy!
-  private def findNextStatesSets(ndaStates: Set[NFAState]): Map[Char, Set[NFAState]] = {
-    var transitions: Map[Char, Set[NFAState]] = Map()
-    for (ndaState <- ndaStates) {
-      for ((input, nextState) <- ndaState.getNextStatesAsSeq) {
-        val currentNextStateSet: Set[NFAState] = transitions.getOrElse(input.get, Set())
-        transitions = transitions + (input.get -> (currentNextStateSet + nextState))
-      }
-    }
-    transitions
+    new DFA(startingState, stateCreator)
   }
 
   override def toString: String = {
@@ -159,7 +149,7 @@ class NFA private(val startingState: NFAState, val acceptingStates: Set[NFAState
       s.getNextStatesAsSeq.exists(_._1.isEmpty))
 
     for (state <- statesWithEpsilonTransition) {
-      for(nextState <- getEpsilonClosure(state)) {
+      for(nextState <- getEpsilonClosure(state) - state) {
         // find all the non-epsilon next states of these, and rewire them
         for((input, nextNextState) <- nextState.getNextStatesAsSeq.filter(_._1.isDefined)) {
           state.addTransition(input, nextNextState)
@@ -175,10 +165,10 @@ class NFA private(val startingState: NFAState, val acceptingStates: Set[NFAState
 
   /**
     * Given a state it returns all states that can be reached from this states via epsilon transitions.
-    * This does not contain the current state!
+    * This does contain the current state
     */
   private def getEpsilonClosure(state: NFAState): Set[NFAState] = {
-    var result: Set[NFAState] = Set()
+    var result: Set[NFAState] = Set(state)
     val stateQueue: util.Queue[NFAState] = new util.LinkedList[NFAState]()
     stateQueue.add(state)
     while(!stateQueue.isEmpty) {
@@ -192,6 +182,24 @@ class NFA private(val startingState: NFAState, val acceptingStates: Set[NFAState
       }
     }
     result
+  }
+
+  /**
+    * Given a set of current states this returns a map Symbol -> Set[NextStates]
+    * where the Set[NextStates] is the set of states that can be reached by any number of
+    * epsilon transitions followed by a single transition containing the input Symbol
+    */
+  private def findNextStatesSets(ndaStates: Set[NFAState]): Map[Char, Set[NFAState]] = {
+    var transitions: Map[Char, Set[NFAState]] = Map()
+    for (ndaState <- ndaStates.foldLeft[Set[NFAState]](ndaStates)((accumulatorSet, state) => accumulatorSet ++ getEpsilonClosure(state))) {
+      for ((input, nextState) <- ndaState.getNextStatesAsSeq) {
+        if (input.isDefined) {
+          val currentNextStateSet: Set[NFAState] = transitions.getOrElse(input.get, Set())
+          transitions = transitions + (input.get -> (currentNextStateSet + nextState))
+        }
+      }
+    }
+    transitions
   }
 
   private def getAllStates: Set[NFAState] = {

@@ -3,7 +3,7 @@ package main
 import java.io.{File, PrintWriter}
 import java.util
 
-class DFA(var startingState: DFAState) {
+class DFA[S <: DFAState](var startingState: S, var stateCreator: Boolean => S) {
 
   override def toString: String = {
     val output: StringBuilder = new StringBuilder()
@@ -18,7 +18,7 @@ class DFA(var startingState: DFAState) {
     val stateQueue: util.Queue[DFAState] = new util.LinkedList[DFAState]()
     stateQueue.add(startingState)
     while (!stateQueue.isEmpty) {
-      val cur: DFAState = stateQueue.poll()
+      val cur = stateQueue.poll()
       result = result + cur
       cur.getTransitions.values.filter(!result.contains(_)).foreach(nextState => {
         stateQueue.add(nextState)
@@ -28,7 +28,7 @@ class DFA(var startingState: DFAState) {
   }
 
   def accept(input: String): Boolean = {
-    var currentState = startingState
+    var currentState: DFAState = startingState
     val inputChar = input.iterator
     while(inputChar.hasNext && currentState != null) {
       currentState = currentState.getNextState(inputChar.next())
@@ -36,8 +36,8 @@ class DFA(var startingState: DFAState) {
     currentState != null && currentState.isAcceptingState
   }
 
-  def copy: DFA = {
-    val newStartingState = new DFAState(startingState.isAcceptingState)
+  def copy: DFA[S] = {
+    val newStartingState = this.stateCreator(startingState.isAcceptingState)
 
     var oldToNewMap: Map[DFAState, DFAState] = Map(startingState -> newStartingState)
     val stateQ: util.Queue[DFAState] = new util.LinkedList[DFAState]()
@@ -56,12 +56,12 @@ class DFA(var startingState: DFAState) {
         newState.addTransition(input, newNextState)
       }
     }
-    new DFA(newStartingState)
+    new DFA[S](newStartingState, this.stateCreator)
   }
 
   override def equals(obj: scala.Any): Boolean = {
     obj match {
-      case otherDFA: DFA =>
+      case otherDFA: DFA[S] =>
         val stateQ: util.Queue[DFAState] = new util.LinkedList[DFAState]()
         stateQ.add(this.startingState)
         var visitedStates: Map[DFAState, DFAState] = Map(this.startingState -> otherDFA.startingState)
@@ -184,9 +184,16 @@ object DFA {
     * currently the character classes are a-z, A-Z 0-9 and \s   //TODO: currently that is a lie!
     * special characters are escaped with a backslash
     */
-  def createFromRegex(regex: String): DFA = {
+  def createFromRegex[S <: DFAState](regex: String, stateCreator: Boolean => S): DFA[S] = {
     val simpleRegex = regex
-    NFA.createFromRegex(simpleRegex).toDFA
+    // TODO: test this!!!!!!!!!!!!
+    NFA.createFromRegex(simpleRegex).toDFA[S](stateCreator)
+
+  }
+
+  def createSimpleFromRegex(regex: String): DFA[DFAState] = {
+    val simpleRegex = regex
+    NFA.createFromRegex(simpleRegex).toDFA[DFAState](isAccepting => new DFAState(isAccepting))
   }
 }
 
