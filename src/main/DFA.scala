@@ -36,6 +36,14 @@ class DFA[S <: DFAState](var startingState: S, var stateCreator: Boolean => S) {
     currentState != null && currentState.isAcceptingState
   }
 
+  def union(otherDFA: DFA[S]): DFA[S] = {
+    // TODO create the union
+
+    null
+  }
+
+  // TODO: def toNFA
+
   def copy: DFA[S] = {
     val newStartingState = this.stateCreator(startingState.isAcceptingState)
 
@@ -186,7 +194,6 @@ object DFA {
     */
   def createFromRegex[S <: DFAState](regex: String, stateCreator: Boolean => S): DFA[S] = {
     val simpleRegex = regex
-    // TODO: test this!!!!!!!!!!!!
     NFA.createFromRegex(simpleRegex).toDFA[S](stateCreator)
 
   }
