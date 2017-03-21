@@ -1,10 +1,5 @@
 workspace(name = "FiniteAutomata")
 
-bind (
-	name = "main",
-	actual = "//src.main",
-)
-
 git_repository(
 	name = "io_bazel_rules_scala",
 	remote = "git://github.com/bazelbuild/rules_scala",
