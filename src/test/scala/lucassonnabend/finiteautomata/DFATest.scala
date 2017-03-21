@@ -1,6 +1,5 @@
-package test
+package finiteautomata
 
-import main.{DFA, DFAState}
 import org.scalatest.{FlatSpec, Matchers}
 
 class DFATest extends FlatSpec with Matchers {

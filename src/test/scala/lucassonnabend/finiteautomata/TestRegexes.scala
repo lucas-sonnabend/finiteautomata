@@ -1,4 +1,4 @@
-package test
+package finiteautomata
 
 /**
   * This singleton contains test regexes.

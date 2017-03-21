@@ -1,7 +1,6 @@
-package test
+package finiteautomata
 
 import org.scalatest.{FlatSpec, Matchers}
-import main.NFA
 
 class NFATest extends FlatSpec with Matchers{
 

@@ -1,4 +1,4 @@
-package main
+package finiteautomata
 
 import java.io.{File, PrintWriter}
 import java.util

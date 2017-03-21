@@ -1,4 +1,4 @@
-package main
+package finiteautomata
 
 /**
   * This object provides a helper function to simplify regexes from the more complex, standard format

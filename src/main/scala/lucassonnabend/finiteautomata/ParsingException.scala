@@ -1,4 +1,4 @@
-package main
+package finiteautomata
 
 /**
   * Exception that is generated when parsing a regex fails

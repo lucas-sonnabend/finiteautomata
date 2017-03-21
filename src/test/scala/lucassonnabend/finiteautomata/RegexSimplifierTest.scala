@@ -1,6 +1,5 @@
-package test
+package finiteautomata
 
-import main.RegexSimplifier
 import org.scalatest.{FlatSpec, Matchers}
 
 class RegexSimplifierTest extends FlatSpec with Matchers {
