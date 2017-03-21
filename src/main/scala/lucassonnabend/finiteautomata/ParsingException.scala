@@ -1,4 +1,4 @@
-package finiteautomata
+package lucassonnabend.finiteautomata
 
 /**
   * Exception that is generated when parsing a regex fails

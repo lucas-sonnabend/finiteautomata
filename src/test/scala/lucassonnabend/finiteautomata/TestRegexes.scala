@@ -1,4 +1,4 @@
-package finiteautomata
+package lucassonnabend.finiteautomata
 
 /**
   * This singleton contains test regexes.

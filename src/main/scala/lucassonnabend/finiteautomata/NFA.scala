@@ -1,4 +1,4 @@
-package finiteautomata
+package lucassonnabend.finiteautomata
 
 import java.util
 

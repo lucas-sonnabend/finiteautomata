@@ -1,4 +1,4 @@
-package finiteautomata
+package lucassonnabend.finiteautomata
 
 import java.io.{File, PrintWriter}
 import java.util
