@@ -45,13 +45,10 @@ class DFA[S <: DFAState](var startingState: S, var stateCreator: Boolean => S) {
     var visitedStates: Map[(DFAState, DFAState), DFAState] = Map((this.startingState, otherDFA.startingState) -> newStartingState)
 
     while(!statesQ.isEmpty) {
-      val statesToMerge = statesQ.poll()
-      val (state1, state2) = statesToMerge
-      val newState = visitedStates(statesToMerge)
-      val transitions = state1.getTransitions ++ (state2 match {
-        case _: DFAState => state2.getTransitions.filter(e => !state1.getTransitions.contains(e._1))
-        case _ => Map()
-      })
+      val (state1, state2) = statesQ.poll()
+      val newState = visitedStates((state1, state2))
+      val transitions = state1.getTransitions ++
+        (if (state2 != null) state2.getTransitions.filter(e => !state1.getTransitions.contains(e._1)) else Map())
 
       for((input, nextState) <- transitions) {
         val otherNextState = if (state2 != null) state2.getNextState(input) else null
