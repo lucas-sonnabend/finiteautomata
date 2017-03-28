@@ -37,12 +37,8 @@ class DFA[S <: DFAState](var startingState: S, var stateCreator: Boolean => S) {
   }
 
   def union(otherDFA: DFA[S]): DFA[S] = {
-    // TODO create the union
-
-
-    // Idea: have a Q of triple of states that should be joined into a single state and the new state
-    // Either of them can be null, if so the non-null state is copied into the new FDA
-    // only the second one will ever be null!
+    // have a Q of tuple of states that should be joined into a single state.
+    // Only the second state can be null, in that case the non-null state is copied into the new FDA.
     val statesQ: util.Queue[(DFAState, DFAState)] = new util.LinkedList[(DFAState, DFAState)]()
     statesQ.add(this.startingState, otherDFA.startingState)
     val newStartingState = stateCreator(this.startingState.isAcceptingState || otherDFA.startingState.isAcceptingState)
@@ -114,7 +110,6 @@ class DFA[S <: DFAState](var startingState: S, var stateCreator: Boolean => S) {
           oldToNewMap = oldToNewMap + (oldNextState -> newNextState)
           newNextState
         } else oldToNewMap(oldNextState)
-
         newState.addTransition(input, newNextState)
       }
     }
