@@ -24,7 +24,10 @@ junit_tests(
 
 junit_tests(
     name = "SimlifierTest",
-    dependencies = [],
+    dependencies = [
+        "src/main/scala/lucassonnabend/finiteautomata:finiteautomata",
+        "3rdparty:scalatest",
+    ],
     sources = [
         "RegexSimplifierTest.scala",
         "TestRegexes.scala",
