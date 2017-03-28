@@ -40,46 +40,30 @@ class DFA[S <: DFAState](var startingState: S, var stateCreator: Boolean => S) {
     // have a Q of tuple of states that should be joined into a single state.
     // Only the second state can be null, in that case the non-null state is copied into the new FDA.
     val statesQ: util.Queue[(DFAState, DFAState)] = new util.LinkedList[(DFAState, DFAState)]()
-    statesQ.add(this.startingState, otherDFA.startingState)
+    statesQ.add((this.startingState, otherDFA.startingState))
     val newStartingState = stateCreator(this.startingState.isAcceptingState || otherDFA.startingState.isAcceptingState)
     var visitedStates: Map[(DFAState, DFAState), DFAState] = Map((this.startingState, otherDFA.startingState) -> newStartingState)
 
     while(!statesQ.isEmpty) {
       val statesToMerge = statesQ.poll()
+      val (state1, state2) = statesToMerge
       val newState = visitedStates(statesToMerge)
+      val transitions = state1.getTransitions ++ (state2 match {
+        case _: DFAState => state2.getTransitions.filter(e => !state1.getTransitions.contains(e._1))
+        case _ => Map()
+      })
 
-      val transitions = statesToMerge match {
-        case (state1: DFAState, null) => state1.getTransitions
-        case (state1: DFAState, state2:DFAState) => state1.getTransitions.filter(e => !state2.getTransitions.contains(e._1)) ++
-          state2.getTransitions.filter(e => !state1.getTransitions.contains(e._1))
-      }
       for((input, nextState) <- transitions) {
-        val newNextState = if (visitedStates.contains((nextState, null))) {
-          visitedStates((nextState, null))
+        val otherNextState = if (state2 != null) state2.getNextState(input) else null
+        val newNextState = if (visitedStates.contains((nextState, otherNextState))) {
+          visitedStates((nextState, otherNextState))
         } else {
-          val newNextState = stateCreator(nextState.isAcceptingState)
-          visitedStates = visitedStates + ((nextState, null) -> newNextState)
-          statesQ.add((nextState, null))
+          val newNextState = stateCreator(nextState.isAcceptingState || (state2 != null && state2.isAcceptingState))
+          visitedStates = visitedStates + ((nextState, otherNextState) -> newNextState)
+          statesQ.add((nextState, otherNextState))
           newNextState
         }
         newState.addTransition(input, newNextState)
-      }
-
-      if(statesToMerge._2 != null) {
-        //consider input symbols that have transitions from both states
-        val (state1, state2) = statesToMerge
-        for((input, state1NextState) <- state1.getTransitions.filter(e => state2.getTransitions.contains(e._1))) {
-          val state2NextState = state2.getTransitions(input)
-          val newNextState = if (visitedStates.contains((state1NextState, state2NextState))) {
-            visitedStates((state1NextState, state2NextState))
-          } else {
-            val newNextState = stateCreator(state1NextState.isAcceptingState || state2NextState.isAcceptingState)
-            visitedStates = visitedStates + ((state1NextState, state2NextState) -> newNextState)
-            statesQ.add((state1NextState, state2NextState))
-            newNextState
-          }
-          newState.addTransition(input, newNextState)
-        }
       }
     }
     new DFA[S](newStartingState, this.stateCreator)
@@ -149,7 +133,7 @@ class DFA[S <: DFAState](var startingState: S, var stateCreator: Boolean => S) {
     output.append("\\usetikzlibrary{positioning,automata}\n")
     output.append("\\usepackage[latin1]{inputenc}\n")
     output.append("\\begin{document}\n")
-    output.append(getTikzPicture())
+    output.append(getTikzPicture)
     output.append("\\end{document}")
 
     val pw = new PrintWriter(new File(filename))
@@ -157,7 +141,7 @@ class DFA[S <: DFAState](var startingState: S, var stateCreator: Boolean => S) {
     pw.close()
   }
 
-  def getTikzPicture(): String = {
+  def getTikzPicture: String = {
     val tikzPicture: StringBuilder = new StringBuilder()
     tikzPicture.append("\\begin{tikzpicture}[shorten >=1pt,node distance=2cm,on grid]\n")
 
@@ -174,7 +158,7 @@ class DFA[S <: DFAState](var startingState: S, var stateCreator: Boolean => S) {
 
       // add edges
       for ((input, nextState) <- state.getTransitions) {
-        val isBackwardsEdge = visitedStates.contains(nextState) && visitedStates(nextState).x < position.x
+        val isBackwardsEdge = visitedStates.contains(nextState) && (visitedStates(nextState).x < position.x || visitedStates(nextState).y > position.y + 1)
         edgeList.append(transToTikzEdge(input, state, nextState, isBackwardsEdge = isBackwardsEdge))
       }
 
