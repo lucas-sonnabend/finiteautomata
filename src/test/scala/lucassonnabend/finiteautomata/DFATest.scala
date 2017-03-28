@@ -62,4 +62,34 @@ class DFATest extends FlatSpec with Matchers {
     }
     dfa.getAllStates.foreach(state => state shouldBe an [IndexedDFAState])
   }
+
+  "DFA.union" should "return a DFA that is the union of the DFAs accepting a and b" in {
+    val dfa1 = DFA.createSimpleFromRegex("a")
+    val dfa2 = DFA.createSimpleFromRegex("b")
+    val dfa3 = dfa1.union(dfa2)
+
+    assert(dfa3.accept("a"))
+    assert(dfa3.accept("b"))
+    assert(!dfa3.accept("c"))
+  }
+
+  "DFA.union" should "return a DFA that is the union of two DFAs" in {
+    val dfa1 = DFA.createSimpleFromRegex(TestRegexes.TEST_REGEX_A_OR_BS_AND_C)
+    val dfa2 = DFA.createSimpleFromRegex(TestRegexes.TEST_REGEX_AB_OR_AA)
+
+    val results = Map(
+      "" -> false,
+      "a" -> false,
+      "ac" -> true,
+      "bbbc" -> true,
+      "abac" -> false,
+      "ab" -> true,
+      "aa" -> true,
+      "ba" -> false)
+
+    val dfa3 = dfa1.union(dfa2)
+    for( (input, result) <- results) {
+      assert(dfa3.accept(input) == result, s" testinput: $input test failed")
+    }
+  }
 }

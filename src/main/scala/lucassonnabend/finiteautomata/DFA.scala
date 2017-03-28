@@ -39,10 +39,64 @@ class DFA[S <: DFAState](var startingState: S, var stateCreator: Boolean => S) {
   def union(otherDFA: DFA[S]): DFA[S] = {
     // TODO create the union
 
-    null
-  }
 
-  // TODO: def toNFA
+    // Idea: have a Q of triple of states that should be joined into a single state and the new state
+    // Either of them can be null, if so the non-null state is copied into the new FDA
+    // only the second one will ever be null!
+    val statesQ: util.Queue[(DFAState, DFAState)] = new util.LinkedList[(DFAState, DFAState)]()
+    statesQ.add(this.startingState, otherDFA.startingState)
+    val newStartingState = stateCreator(this.startingState.isAcceptingState || otherDFA.startingState.isAcceptingState)
+    var visitedStates: Map[(DFAState, DFAState), DFAState] = Map((this.startingState, otherDFA.startingState) -> newStartingState)
+
+    while(!statesQ.isEmpty) {
+      val statesToMerge = statesQ.poll()
+      val newState = visitedStates(statesToMerge)
+      statesToMerge match {
+        case (state1, null) =>
+          for((input, nextState) <- state1.getTransitions) {
+            val newNextState = if (visitedStates.contains((nextState, null))) {
+              visitedStates(nextState, null)
+            } else {
+              val newNextState = stateCreator(nextState.isAcceptingState)
+              visitedStates = visitedStates + ((nextState, null) -> newNextState)
+              statesQ.add((nextState, null))
+              newNextState
+            }
+            newState.addTransition(input, newNextState)
+          }
+        case (state1, state2) =>
+          //consider input symbols that have transitions from both states
+          for((input, state1NextState) <- state1.getTransitions.filter(e => state2.getTransitions.contains(e._1))) {
+            val state2NextState = state2.getTransitions(input)
+            val newNextState = if (visitedStates.contains((state1NextState, state2NextState))) {
+              visitedStates(state1NextState, state2NextState)
+            } else {
+              val newNextState = stateCreator(state1NextState.isAcceptingState || state2NextState.isAcceptingState)
+              visitedStates = visitedStates + ((state1NextState, state2NextState) -> newNextState)
+              statesQ.add(state1NextState, state2NextState)
+              newNextState
+            }
+            newState.addTransition(input, newNextState)
+          }
+          // consider input symbols that have a transition only on one state
+          val transitionDiff = state1.getTransitions.filter(e => !state2.getTransitions.contains(e._1)) ++
+            state2.getTransitions.filter(e => !state1.getTransitions.contains(e._1))
+          for((input, nextState) <- transitionDiff) {
+            val newNextState = if(visitedStates.contains(nextState, null)) {
+              visitedStates(nextState, null)
+            } else {
+              val newNextState = stateCreator(nextState.isAcceptingState)
+              visitedStates = visitedStates + ((nextState, null) -> newNextState)
+              statesQ.add(nextState, null)
+              newNextState
+            }
+            newState.addTransition(input, newNextState)
+          }
+      }
+    }
+
+    new DFA[S](newStartingState, this.stateCreator)
+  }
 
   def copy: DFA[S] = {
     val newStartingState = this.stateCreator(startingState.isAcceptingState)
@@ -189,7 +243,7 @@ object DFA {
     * This creates a DFA from a regex. The regex supports the minimal set of operators: concat, star <*> and union <|>.
     * The precedence is star <- concat <- union
     * Additional operations are plus <+> and []
-    * currently the character classes are a-z, A-Z 0-9 and \s   //TODO: currently that is a lie!
+    * currently the character classes are a-z, A-Z 0-9 and \s
     * special characters are escaped with a backslash
     */
   def createFromRegex[S <: DFAState](regex: String, stateCreator: Boolean => S): DFA[S] = {
