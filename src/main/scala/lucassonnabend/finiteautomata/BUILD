@@ -11,5 +11,4 @@ scala_library(
         name = "finiteautomata",
         repo = public,
     )
-
 )
