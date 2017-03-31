@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+
+<ivysettings>
+
+  <!-- The login an password come from netrc_credentials() (TODO), and it has to match the netrc entries refered to by pants.ini
+
+realm has to match the kind of repository you are publishing to
+
+  TODO: most of these things still have to be set up properly
+  -->
+
+  <credentials host="articatory.example.com"
+               realm="Artifactory Realm"
+               username="${login}"
+               passwd="${password}"/>
+
+  <resolvers>
+    <chain name="chain-repos" returnFirst="true">
+      <ibiblio name="artifactory.example.com"
+               m2compatible="true"
+               usepoms="true"
+               root="httops://artifactory.example.com/content/groups/public/"/>
+    </chain>
+    <url name="artifactory.example.com" m2compatible="true">
+      <artifact pattern="https://artifactory.example.com/libs-release-local/[organization]/[module]/[revision]/[module]-[revision](-[classifier]).[ext]"/>
+    </url>
+  </resolvers>
+
+</ivysettings>
