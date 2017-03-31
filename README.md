@@ -4,3 +4,10 @@ This is a scala library to generate nondeterministic finite automata (NFA) and d
 
 
 This project is still work in progress!
+
+## get the jar
+
+At the moment the jar is not available in a public maven repository but you can
+* install maven (if you haven't already)
+* update the `publish_local.sh` script to point to your local repository
+* run the `publish_local.sh` script
