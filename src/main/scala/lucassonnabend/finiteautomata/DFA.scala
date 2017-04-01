@@ -13,18 +13,22 @@ class DFA[S <: DFAState](var startingState: S, var stateCreator: Boolean => S) {
     output.result()
   }
 
-  def getAllStates: Set[DFAState] = {
-    var result: Set[DFAState] = Set()
-    val stateQueue: util.Queue[DFAState] = new util.LinkedList[DFAState]()
-    stateQueue.add(startingState)
-    while (!stateQueue.isEmpty) {
-      val cur = stateQueue.poll()
-      result = result + cur
-      cur.getTransitions.values.filter(!result.contains(_)).foreach(nextState => {
-        stateQueue.add(nextState)
-      })
+  def getAllStates: Iterable[S] = new Iterable[S](){
+    val iterator = new Iterator[S]() {
+      val stateQueue: util.Queue[DFAState] = new util.LinkedList[DFAState]()
+      var visitedSet: Set[DFAState] = Set()
+      stateQueue.add(startingState)
+
+      override def hasNext: Boolean = !stateQueue.isEmpty
+      override def next(): S = {
+        val cur = stateQueue.poll()
+        visitedSet = visitedSet + cur
+        cur.getTransitions.values.filter(!visitedSet.contains(_)).foreach(nextState => {
+          stateQueue.add(nextState)
+        })
+        cur.asInstanceOf[S]
+      }
     }
-    result
   }
 
   def accept(input: String): Boolean = {
@@ -35,6 +39,10 @@ class DFA[S <: DFAState](var startingState: S, var stateCreator: Boolean => S) {
     }
     currentState != null && currentState.isAcceptingState
   }
+
+  // TODO: this can be a problem because we are creating new states, so we have to use the state creator of either
+  // the current or the other DFA. Idea: if we are creating a new state by merging two then we use our creator,
+  // otherwise we use the creator of whatever DFA the original state came from
 
   def union(otherDFA: DFA[S]): DFA[S] = {
     // have a Q of tuple of states that should be joined into a single state.
