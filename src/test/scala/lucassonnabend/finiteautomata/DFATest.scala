@@ -13,6 +13,9 @@ class DFATest extends FlatSpec with Matchers {
       cur
     }
   }
+  private class CharIndexedDFAState(val id: Char, isAcceptingState: Boolean) extends DFAState(isAcceptingState) {
+    def getChar: Char = id
+  }
 
   "DFA.createFromRegex" should "create a DFA from the test regexes" in {
     for ((testRegex, testInputs) <- TestRegexes.TEST_INPUTS) {
@@ -91,5 +94,20 @@ class DFATest extends FlatSpec with Matchers {
     for( (input, result) <- results) {
       assert(dfa3.accept(input) == result, s" testinput: $input test failed")
     }
+  }
+
+  "DFA.union" should "return a DFA that is the union of two DFAs using the state creator functions of both DFAs" in {
+    val dfa1 = DFA.createFromRegex[CharIndexedDFAState]("abc|dd", isAccepting => new CharIndexedDFAState('a', isAccepting))
+    val dfa2 = DFA.createFromRegex[CharIndexedDFAState]("acb|dd", isAccepting => new CharIndexedDFAState('b', isAccepting))
+
+    val dfa3 = dfa1.union(dfa2)
+
+    val charOfABC = dfa3.startingState.getNextState('a').getNextState('b').getNextState('c').asInstanceOf[CharIndexedDFAState].getChar
+    val charOfACB = dfa3.startingState.getNextState('a').getNextState('c').getNextState('b').asInstanceOf[CharIndexedDFAState].getChar
+    val charOfDD = dfa3.startingState.getNextState('d').getNextState('d').asInstanceOf[CharIndexedDFAState].getChar
+
+    assert(charOfABC == 'a')
+    assert(charOfACB == 'b')
+    assert(charOfDD == 'a')
   }
 }

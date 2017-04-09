@@ -40,38 +40,76 @@ class DFA[S <: DFAState](var startingState: S, var stateCreator: Boolean => S) {
     currentState != null && currentState.isAcceptingState
   }
 
-  // TODO: this can be a problem because we are creating new states, so we have to use the state creator of either
-  // the current or the other DFA. Idea: if we are creating a new state by merging two then we use our creator,
-  // otherwise we use the creator of whatever DFA the original state came from
 
   def union(otherDFA: DFA[S]): DFA[S] = {
     // have a Q of tuple of states that should be joined into a single state.
-    // Only the second state can be null, in that case the non-null state is copied into the new FDA.
     val statesQ: util.Queue[(DFAState, DFAState)] = new util.LinkedList[(DFAState, DFAState)]()
     statesQ.add((this.startingState, otherDFA.startingState))
     val newStartingState = stateCreator(this.startingState.isAcceptingState || otherDFA.startingState.isAcceptingState)
     var visitedStates: Map[(DFAState, DFAState), DFAState] = Map((this.startingState, otherDFA.startingState) -> newStartingState)
 
     while(!statesQ.isEmpty) {
-      val (state1, state2) = statesQ.poll()
-      val newState = visitedStates((state1, state2))
-      val transitions = state1.getTransitions ++
-        (if (state2 != null) state2.getTransitions.filter(e => !state1.getTransitions.contains(e._1)) else Map())
+      val currentStates = statesQ.poll() // this is a pair of states that you can be in, starting from the combination of both starting states
+      val newState = visitedStates(currentStates)
 
-      for((input, nextState) <- transitions) {
-        val otherNextState = if (state2 != null) state2.getNextState(input) else null
-        val newNextState = if (visitedStates.contains((nextState, otherNextState))) {
-          visitedStates((nextState, otherNextState))
+      val transitions: Map[Char, (DFAState, DFAState)] = currentStates match {
+        case (state1: DFAState, null) => state1.getTransitions.map(e => (e._1, (e._2, null)))
+        case (null, state2: DFAState) => state2.getTransitions.map(e => (e._1, (null, e._2)))
+        case (state1:DFAState, state2: DFAState) => mergeTransitions(state1.getTransitions, state2.getTransitions)
+      }
+
+      for ((input, nextStates) <- transitions) {
+        val newNextState = if (visitedStates.contains(nextStates)) {
+          visitedStates(nextStates)
         } else {
-          val newNextState = stateCreator(nextState.isAcceptingState || (state2 != null && state2.isAcceptingState))
-          visitedStates = visitedStates + ((nextState, otherNextState) -> newNextState)
-          statesQ.add((nextState, otherNextState))
+
+          val newNextState = nextStates match {
+            case (nextState1: DFAState, null) => this.stateCreator(nextState1.isAcceptingState)
+            case (null, nextState2: DFAState) => otherDFA.stateCreator(nextState2.isAcceptingState)
+            case (nextState1: DFAState, nextState2: DFAState)  => this.stateCreator(nextState1.isAcceptingState || nextState2.isAcceptingState)
+          }
+          visitedStates = visitedStates + (nextStates -> newNextState)
+          statesQ.add(nextStates)
           newNextState
         }
         newState.addTransition(input, newNextState)
       }
     }
     new DFA[S](newStartingState, this.stateCreator)
+  }
+
+  def mergeTransitions(transitions1: Map[Char, DFAState], transitions2: Map[Char, DFAState]): Map[Char, (DFAState, DFAState)] = {
+    var sortedTrans1: Seq[(Char, DFAState)] = transitions1.toSeq.sortBy(_._1)
+    var sortedTrans2: Seq[(Char, DFAState)] = transitions2.toSeq.sortBy(_._1)
+    var result: Map[Char, (DFAState, DFAState)] = Map()
+
+    while(sortedTrans1.nonEmpty && sortedTrans2.nonEmpty) {
+      val nextTrans = if (sortedTrans1.head._1 == sortedTrans2.head._1) {
+        val nextChar = sortedTrans1.head._1
+        val nextStates = (sortedTrans1.head._2, sortedTrans2.head._2)
+        sortedTrans1 = sortedTrans1.tail
+        sortedTrans2 = sortedTrans2.tail
+
+        (nextChar, nextStates)
+      } else if (sortedTrans1.head._1 < sortedTrans2.head._1) {
+        val nextChar = sortedTrans1.head._1
+        val nextStates = (sortedTrans1.head._2, null)
+        sortedTrans1 = sortedTrans1.tail
+        (nextChar, nextStates)
+      } else {
+        val nextChar = sortedTrans2.head._1
+        val nextStates = (null, sortedTrans2.head._2)
+        sortedTrans2 = sortedTrans2.tail
+        (nextChar, nextStates)
+      }
+      result = result + nextTrans
+    }
+    val rest = if (sortedTrans1.nonEmpty) {
+      sortedTrans1.map(elem => (elem._1, (elem._2, null))).toMap
+    } else if (sortedTrans2.nonEmpty) {
+      sortedTrans2.map(elem => (elem._1, (null, elem._2))).toMap
+    } else Map()
+    result ++ rest
   }
 
   def copy: DFA[S] = {
